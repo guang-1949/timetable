@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#2b78e4">
+    <meta name="description" content="按周查看的课程表，支持自己添加和删除课程。">
+    <title>课表</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="课表">
+    <meta name="mobile-web-app-capable" content="yes">
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, sans-serif;
+        }
+        body {
+            margin: 8px;
+            background: #f6f7f9;
+        }
+        .bar {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom:10px;
+            align-items:center;
+        }
+        button {
+            padding: 8px 10px;
+            border: none;
+            border-radius: 6px;
+            background: #2b78e4;
+            color:white;
+            font-size:14px;
+        }
+        .week-text{
+            font-size:16px;
+            font-weight:bold;
+            padding:0 4px;
+        }
+        #weekSelect{
+            padding:7px;
+            border-radius:6px;
+            border:1px solid #ccc;
+            font-size:14px;
+        }
+        .table-wrap{
+            width:100%;
+            overflow-x:auto;
+        }
+        table{
+            width:100%;
+            border-collapse: collapse;
+            background:#fff;
+            table-layout: fixed;
+        }
+        td,th{
+            border:1px solid #ccc;
+            padding:4px 2px;
+            font-size:12px;
+            text-align:center;
+            min-height:70px;
+            vertical-align:top;
+            word-break: break-all;
+        }
+        .course-cell{
+            padding:3px;
+            border-radius:4px;
+            color:#222;
+            cursor:pointer;
+            line-height:1.35;
+        }
+        .mask{
+            position:fixed;
+            top:0;
+            left:0;
+            width:100%;
+            height:100%;
+            background:rgba(0,0,0,0.4);
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:16px;
+            z-index:999;
+        }
+        .form-box{
+            width:100%;
+            max-width:360px;
+            background:white;
+            padding:16px;
+            border-radius:10px;
+            max-height:100%;
+            overflow-y:auto;
+        }
+        .form-item{
+            margin:8px 0;
+        }
+        label{
+            display:block;
+            font-size:14px;
+            margin-bottom:3px;
+        }
+        input,select{
+            width:100%;
+            padding:8px;
+            border:1px solid #bbb;
+            border-radius:5px;
+            font-size:16px;
+        }
+        .btn-row{
+            display:flex;
+            gap:8px;
+            margin-top:12px;
+        }
+        #cancelBtn{
+            background:#888;
+        }
+        .tip{
+            font-size:12px;
+            color:#666;
+        }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <button onclick="prevWeek()">上一周</button>
+        <span class="week-text">第</span>
+        <select id="weekSelect" onchange="jumpWeek()"></select>
+        <span class="week-text">周</span>
+        <button onclick="nextWeek()">下一周</button>
+        <button onclick="openAdd()">添加课程</button>
+        <button onclick="clearAll()">清空全部</button>
+    </div>
+    <div class="tip">长按课程可以删除</div>
+    <div class="table-wrap">
+        <table id="tb">
+            <colgroup>
+                <col style="width:15%">
+                <col style="width:17%">
+                <col style="width:17%">
+                <col style="width:17%">
+                <col style="width:17%">
+                <col style="width:17%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>节次\星期</th>
+                    <th>周一</th>
+                    <th>周二</th>
+                    <th>周三</th>
+                    <th>周四</th>
+                    <th>周五</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+
+    <!--弹窗表单-->
+    <div class="mask" id="mask">
+        <div class="form-box">
+            <div class="form-item">
+                <label>课程名称</label>
+                <input id="cName">
+            </div>
+            <div class="form-item">
+                <label>老师</label>
+                <input id="cTea">
+            </div>
+            <div class="form-item">
+                <label>教室</label>
+                <input id="cRoom">
+            </div>
+            <div class="form-item">
+                <label>星期</label>
+                <select id="cWd">
+                    <option value="0">周一</option>
+                    <option value="1">周二</option>
+                    <option value="2">周三</option>
+                    <option value="3">周四</option>
+                    <option value="4">周五</option>
+                </select>
+            </div>
+            <div class="form-item">
+                <label>节次</label>
+                <select id="cSec">
+                    <option value="0">1-2节</option>
+                    <option value="1">3-4节</option>
+                    <option value="2">5-6节</option>
+                    <option value="3">7-8节</option>
+                </select>
+            </div>
+            <div class="form-item">
+                <label>起始周</label>
+                <input id="cS" type="number" min="1" max="18" value="1">
+            </div>
+            <div class="form-item">
+                <label>结束周</label>
+                <input id="cE" type="number" min="1" max="18" value="18">
+            </div>
+            <div class="btn-row">
+                <button onclick="saveCourse()">确认添加</button>
+                <button id="cancelBtn" onclick="closeAdd()">取消</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+let weekNow = 1;
+const MAX_WEEK = 18;
+const DAY_COUNT = 5;
+const secText = ["1-2节","3-4节","5-6节","7-8节"];
+// 课程背景色池
+const colorList = [
+    "#d7e8fb","#fce4ec","#e8f5e9","#fff3e0","#f3e5f5","#e0f7fa","#ffebee"
+];
+
+// 预设课程（第1 - 18周，周一至周五）
+const defaultCourses = [
+    // ===== 第1周课程 =====
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:1, end_week:1, color:"#e8f5e9"},
+
+    // ===== 第2周课程 =====
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:2, end_week:2, color:"#fff3e0"},
+
+    // ===== 第3周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:3, end_week:3, color:"#fff3e0"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:3, end_week:3, color:"#d7e8fb"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:3, end_week:3, color:"#e8f5e9"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼608室", week_day:1, section:0, start_week:3, end_week:3, color:"#e0f7fa"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:3, end_week:3, color:"#fce4ec"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:3, end_week:3, color:"#f3e5f5"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:3, end_week:3, color:"#e8f5e9"},
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼612室", week_day:2, section:2, start_week:3, end_week:3, color:"#fff3e0"},
+    // 周四
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:3, end_week:3, color:"#d7e8fb"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:3, end_week:3, color:"#fce4ec"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:3, end_week:3, color:"#e8f5e9"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:3, end_week:3, color:"#fff3e0"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:3, end_week:3, color:"#e0f7fa"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:3, end_week:3, color:"#d7e8fb"},
+
+    // ===== 第4周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:4, end_week:4, color:"#fce4ec"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:4, end_week:4, color:"#e0f7fa"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:4, end_week:4, color:"#fce4ec"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼608室", week_day:1, section:0, start_week:4, end_week:4, color:"#fff3e0"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:4, end_week:4, color:"#e0f7fa"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:4, end_week:4, color:"#d7e8fb"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:4, end_week:4, color:"#fff3e0"},
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼612室", week_day:2, section:2, start_week:4, end_week:4, color:"#f3e5f5"},
+    // 周四
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:4, end_week:4, color:"#d7e8fb"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:4, end_week:4, color:"#fff3e0"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:4, end_week:4, color:"#e8f5e9"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:4, end_week:4, color:"#fff3e0"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:4, end_week:4, color:"#fff3e0"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:4, end_week:4, color:"#e8f5e9"},
+
+    // ===== 第5周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:5, end_week:5, color:"#d7e8fb"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:5, end_week:5, color:"#e8f5e9"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:5, end_week:5, color:"#e0f7fa"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知勤庭301室", week_day:1, section:0, start_week:5, end_week:5, color:"#fff3e0"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:5, end_week:5, color:"#fce4ec"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:5, end_week:5, color:"#f3e5f5"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:5, end_week:5, color:"#e0f7fa"},
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼612室", week_day:2, section:2, start_week:5, end_week:5, color:"#fff3e0"},
+    // 周四
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:5, end_week:5, color:"#e8f5e9"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:5, end_week:5, color:"#e0f7fa"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:5, end_week:5, color:"#d7e8fb"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:5, end_week:5, color:"#fff3e0"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:5, end_week:5, color:"#e8f5e9"},
+
+    // ===== 第6周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:6, end_week:6, color:"#e0f7fa"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:6, end_week:6, color:"#d7e8fb"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:6, end_week:6, color:"#e0f7fa"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知勤庭301室", week_day:1, section:0, start_week:6, end_week:6, color:"#e8f5e9"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:6, end_week:6, color:"#d7e8fb"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:6, end_week:6, color:"#fce4ec"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:6, end_week:6, color:"#fff3e0"},
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼612室", week_day:2, section:2, start_week:6, end_week:6, color:"#f3e5f5"},
+    // 周四
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:6, end_week:6, color:"#fce4ec"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:6, end_week:6, color:"#fff3e0"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:4, section:0, start_week:6, end_week:6, color:"#e8f5e9"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:6, end_week:6, color:"#f3e5f5"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:6, end_week:6, color:"#fff3e0"},
+
+    // ===== 第7周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:7, end_week:7, color:"#e0f7fa"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:7, end_week:7, color:"#fff3e0"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:7, end_week:7, color:"#fff3e0"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知勤庭301室", week_day:1, section:0, start_week:7, end_week:7, color:"#d7e8fb"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:7, end_week:7, color:"#f3e5f5"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:7, end_week:7, color:"#fce4ec"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:7, end_week:7, color:"#fff3e0"},
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼612室", week_day:2, section:2, start_week:7, end_week:7, color:"#e8f5e9"},
+    // 周四
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:7, end_week:7, color:"#fff3e0"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:7, end_week:7, color:"#f3e5f5"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:7, end_week:7, color:"#e0f7fa"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:7, end_week:7, color:"#d7e8fb"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:7, end_week:7, color:"#e0f7fa"},
+
+    // ===== 第8周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:8, end_week:8, color:"#e8f5e9"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:8, end_week:8, color:"#f3e5f5"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:8, end_week:8, color:"#e8f5e9"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知勤庭301室", week_day:1, section:0, start_week:8, end_week:8, color:"#d7e8fb"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:8, end_week:8, color:"#f3e5f5"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:8, end_week:8, color:"#fff3e0"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:8, end_week:8, color:"#e0f7fa"},
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼612室", week_day:2, section:2, start_week:8, end_week:8, color:"#fce4ec"},
+    // 周四
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:8, end_week:8, color:"#e0f7fa"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:8, end_week:8, color:"#fff3e0"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:8, end_week:8, color:"#fce4ec"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:8, end_week:8, color:"#d7e8fb"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:8, end_week:8, color:"#d7e8fb"},
+
+    // ===== 第9周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:9, end_week:9, color:"#d7e8fb"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:9, end_week:9, color:"#f3e5f5"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:9, end_week:9, color:"#fff3e0"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:9, end_week:9, color:"#e0f7fa"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:9, end_week:9, color:"#fce4ec"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:9, end_week:9, color:"#fff3e0"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:9, end_week:9, color:"#fff3e0"},
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼612室", week_day:2, section:2, start_week:9, end_week:9, color:"#e8f5e9"},
+    // 周四
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:9, end_week:9, color:"#f3e5f5"},
+    {name:"形势与政策", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:9, end_week:9, color:"#e8f5e9"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:9, end_week:9, color:"#d7e8fb"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:9, end_week:9, color:"#d7e8fb"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:9, end_week:9, color:"#e0f7fa"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:9, end_week:9, color:"#fff3e0"},
+
+    // ===== 第10周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:10, end_week:10, color:"#e0f7fa"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:10, end_week:10, color:"#e8f5e9"},
+    {name:"数据结构", teacher:"", room:"知敬楼402室", week_day:0, section:2, start_week:10, end_week:10, color:"#e0f7fa"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:10, end_week:10, color:"#fce4ec"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:10, end_week:10, color:"#e8f5e9"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:10, end_week:10, color:"#fff3e0"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:10, end_week:10, color:"#f3e5f5"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:10, end_week:10, color:"#d7e8fb"},
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:10, end_week:10, color:"#e8f5e9"},
+    {name:"形势与政策", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:10, end_week:10, color:"#f3e5f5"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:10, end_week:10, color:"#e8f5e9"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:4, section:0, start_week:10, end_week:10, color:"#fff3e0"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:10, end_week:10, color:"#fff3e0"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:10, end_week:10, color:"#ffebee"},
+
+    // ===== 第11周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:11, end_week:11, color:"#fff3e0"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:11, end_week:11, color:"#e8f5e9"},
+    {name:"数据结构实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:11, end_week:11, color:"#f3e5f5"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:11, end_week:11, color:"#fce4ec"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:11, end_week:11, color:"#e8f5e9"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:11, end_week:11, color:"#e0f7fa"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:11, end_week:11, color:"#f3e5f5"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:2, section:2, start_week:11, end_week:11, color:"#ffebee"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:11, end_week:11, color:"#d7e8fb"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:11, end_week:11, color:"#e8f5e9"},
+    {name:"形势与政策", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:11, end_week:11, color:"#f3e5f5"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:11, end_week:11, color:"#e8f5e9"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:11, end_week:11, color:"#fff3e0"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:11, end_week:11, color:"#fce4ec"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:11, end_week:11, color:"#ffebee"},
+
+    // ===== 第12周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:12, end_week:12, color:"#d7e8fb"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:12, end_week:12, color:"#fce4ec"},
+    {name:"数据结构", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:12, end_week:12, color:"#d7e8fb"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:12, end_week:12, color:"#f3e5f5"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:12, end_week:12, color:"#fce4ec"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:12, end_week:12, color:"#fff3e0"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:12, end_week:12, color:"#e8f5e9"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:2, section:2, start_week:12, end_week:12, color:"#e0f7fa"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:12, end_week:12, color:"#fff3e0"},
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:12, end_week:12, color:"#f3e5f5"},
+    {name:"形势与政策", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:12, end_week:12, color:"#e8f5e9"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:12, end_week:12, color:"#fff3e0"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:12, end_week:12, color:"#fce4ec"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:12, end_week:12, color:"#d7e8fb"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:12, end_week:12, color:"#e0f7fa"},
+
+    // ===== 第13周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:13, end_week:13, color:"#fff3e0"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:13, end_week:13, color:"#fff3e0"},
+    {name:"数据结构实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:13, end_week:13, color:"#fce4ec"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:13, end_week:13, color:"#e0f7fa"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:13, end_week:13, color:"#d7e8fb"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:13, end_week:13, color:"#e8f5e9"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:13, end_week:13, color:"#fce4ec"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:13, end_week:13, color:"#f3e5f5"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:13, end_week:13, color:"#fff3e0"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:13, end_week:13, color:"#e0f7fa"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:13, end_week:13, color:"#f3e5f5"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:13, end_week:13, color:"#fff3e0"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:13, end_week:13, color:"#e0f7fa"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:13, end_week:13, color:"#fce4ec"},
+
+    // ===== 第14周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:14, end_week:14, color:"#fff3e0"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:14, end_week:14, color:"#f3e5f5"},
+    {name:"数据结构", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:14, end_week:14, color:"#fff3e0"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:14, end_week:14, color:"#fce4ec"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:14, end_week:14, color:"#f3e5f5"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:14, end_week:14, color:"#d7e8fb"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:14, end_week:14, color:"#fff3e0"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:14, end_week:14, color:"#e8f5e9"},
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:14, end_week:14, color:"#fce4ec"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:14, end_week:14, color:"#e8f5e9"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:14, end_week:14, color:"#e0f7fa"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:14, end_week:14, color:"#e8f5e9"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:14, end_week:14, color:"#e0f7fa"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:14, end_week:14, color:"#fff3e0"},
+
+    // ===== 第15周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:15, end_week:15, color:"#d7e8fb"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:15, end_week:15, color:"#fff3e0"},
+    {name:"数据结构实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:15, end_week:15, color:"#fff3e0"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:15, end_week:15, color:"#e0f7fa"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:15, end_week:15, color:"#fce4ec"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:15, end_week:15, color:"#f3e5f5"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:15, end_week:15, color:"#fff3e0"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:15, end_week:15, color:"#fff3e0"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:15, end_week:15, color:"#fff3e0"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:15, end_week:15, color:"#f3e5f5"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:15, end_week:15, color:"#e8f5e9"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:15, end_week:15, color:"#d7e8fb"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:15, end_week:15, color:"#e0f7fa"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:15, end_week:15, color:"#e8f5e9"},
+
+    // ===== 第16周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:16, end_week:16, color:"#e8f5e9"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:16, end_week:16, color:"#fff3e0"},
+    {name:"数据结构", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:16, end_week:16, color:"#e8f5e9"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:16, end_week:16, color:"#fce4ec"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:16, end_week:16, color:"#fff3e0"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:16, end_week:16, color:"#f3e5f5"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:16, end_week:16, color:"#e0f7fa"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:16, end_week:16, color:"#fff3e0"},
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:16, end_week:16, color:"#d7e8fb"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:16, end_week:16, color:"#d7e8fb"},
+    {name:"一笔一画", teacher:"", room:"学前教育实验实训中心(忠信楼)", week_day:3, section:3, start_week:16, end_week:16, color:"#fff3e0"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:4, section:0, start_week:16, end_week:16, color:"#d7e8fb"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:16, end_week:16, color:"#e8f5e9"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:16, end_week:16, color:"#fff3e0"},
+
+    // ===== 第17周课程 =====
+    // 周一
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:17, end_week:17, color:"#fff3e0"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼504室", week_day:0, section:1, start_week:17, end_week:17, color:"#fff3e0"},
+    {name:"数据结构实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:17, end_week:17, color:"#f3e5f5"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:17, end_week:17, color:"#fce4ec"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:17, end_week:17, color:"#d7e8fb"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:17, end_week:17, color:"#e8f5e9"},
+    {name:"数据结构", teacher:"", room:"知敬楼408室", week_day:2, section:1, start_week:17, end_week:17, color:"#f3e5f5"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:17, end_week:17, color:"#fce4ec"},
+    {name:"Java程序设计", teacher:"", room:"知敬楼413室", week_day:3, section:1, start_week:17, end_week:17, color:"#fff3e0"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:17, end_week:17, color:"#e0f7fa"},
+    // 周五
+    {name:"面向对象程序设计", teacher:"", room:"知敬楼405室", week_day:4, section:0, start_week:17, end_week:17, color:"#fff3e0"},
+    {name:"大学英语", teacher:"", room:"知敬楼613室", week_day:4, section:1, start_week:17, end_week:17, color:"#fce4ec"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:17, end_week:17, color:"#e0f7fa"},
+
+    // ===== 第18周课程 =====
+    // 周一
+    {name:"数据结构", teacher:"", room:"知敬楼414室", week_day:0, section:0, start_week:18, end_week:18, color:"#e8f5e9"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼416室", week_day:0, section:1, start_week:18, end_week:18, color:"#d7e8fb"},
+    {name:"数据结构", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:0, section:2, start_week:18, end_week:18, color:"#e8f5e9"},
+    // 周二
+    {name:"大学英语", teacher:"", room:"知敬楼612室", week_day:1, section:0, start_week:18, end_week:18, color:"#f3e5f5"},
+    {name:"马克思主义基本原理", teacher:"", room:"知敬楼414室", week_day:1, section:1, start_week:18, end_week:18, color:"#d7e8fb"},
+    // 周三
+    {name:"人工智能导论", teacher:"", room:"知敬楼402室", week_day:2, section:0, start_week:18, end_week:18, color:"#e0f7fa"},
+    {name:"大学生职业发展", teacher:"", room:"知敬楼508室", week_day:2, section:1, start_week:18, end_week:18, color:"#fce4ec"},
+    // 周四
+    {name:"概率论与数理统计", teacher:"", room:"知敬楼506室", week_day:3, section:0, start_week:18, end_week:18, color:"#f3e5f5"},
+    {name:"Java程序设计实验", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:3, section:1, start_week:18, end_week:18, color:"#fff3e0"},
+    {name:"Web开发技术", teacher:"", room:"知敬楼614室", week_day:3, section:2, start_week:18, end_week:18, color:"#fff3e0"},
+    // 周五
+    {name:"Web开发技术", teacher:"", room:"知勤庭软件开发实验室(311室)", week_day:4, section:0, start_week:18, end_week:18, color:"#fff3e0"},
+    {name:"面向对象程序设计实验", teacher:"", room:"知勤庭前端与移动软件开发实验室", week_day:4, section:1, start_week:18, end_week:18, color:"#fff3e0"},
+    {name:"大学体育", teacher:"", room:"田径场恒毅篮球场003", week_day:4, section:2, start_week:18, end_week:18, color:"#fff3e0"}
+];
+
+// 直接使用预设课程数据，确保打开就能看到
+let courseList = JSON.parse(JSON.stringify(defaultCourses));
+
+// 读取上次保存的修改（只认周一至周五、第 1-18 周的数据）
+const STORE_KEY = "courseData_v2";
+function loadSaved(){
+    try{
+        const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+        if(Array.isArray(saved) && saved.length > 0){
+            courseList = saved.filter(c => c.week_day >= 0 && c.week_day < DAY_COUNT);
+        }
+    }catch(e){}
+}
+function persist(){
+    try{
+        localStorage.setItem(STORE_KEY, JSON.stringify(courseList));
+    }catch(e){}
+}
+loadSaved();
+
+function getRandomColor(){
+    return colorList[Math.floor(Math.random()*colorList.length)];
+}
+
+// 填充周下拉
+function fillWeekSelect(){
+    const sel = document.getElementById("weekSelect");
+    sel.innerHTML = "";
+    for(let i=1;i<=MAX_WEEK;i++){
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.innerText = i;
+        sel.appendChild(opt);
+    }
+    sel.value = weekNow;
+}
+// 跳转周次
+function jumpWeek(){
+    weekNow = Number(document.getElementById("weekSelect").value);
+    render();
+}
+
+function render(){
+    fillWeekSelect();
+    const tbody = document.querySelector("#tb tbody");
+    tbody.innerHTML = "";
+    for(let secIdx=0;secIdx<4;secIdx++){
+        const tr = document.createElement("tr");
+        const td0 = document.createElement("td");
+        td0.innerText = secText[secIdx];
+        tr.appendChild(td0);
+        for(let wd=0;wd<DAY_COUNT;wd++){
+            const td = document.createElement("td");
+            const find = courseList.find(c=>
+                c.week_day == wd && c.section == secIdx && c.start_week <= weekNow && weekNow <= c.end_week
+            );
+            if(find){
+                const div = document.createElement("div");
+                div.className = "course-cell";
+                div.style.background = find.color || getRandomColor();
+                div.innerHTML = `${find.name}<br>${find.room}<br>${find.teacher}`;
+                // 长按删除
+                let timer = null;
+                div.addEventListener("touchstart",()=>{
+                    timer = setTimeout(()=>{
+                        if(confirm("确定删除这个课程？")){
+                            const idx = courseList.indexOf(find);
+                            if(idx>-1) courseList.splice(idx,1);
+                            persist();
+                            render();
+                        }
+                    },800)
+                })
+                div.addEventListener("touchend",()=>clearTimeout(timer));
+                div.addEventListener("touchmove",()=>clearTimeout(timer));
+                // 电脑端右键删除
+                div.oncontextmenu = (e)=>{
+                    e.preventDefault();
+                    if(confirm("确定删除这个课程？")){
+                        const idx = courseList.indexOf(find);
+                        if(idx>-1) courseList.splice(idx,1);
+                        persist();
+                        render();
+                    }
+                }
+                td.appendChild(div);
+            }
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+    }
+}
+function prevWeek(){
+    if(weekNow>1){
+        weekNow--;render();
+    }
+}
+function nextWeek(){
+    if(weekNow<MAX_WEEK){
+        weekNow++;render();
+    }
+}
+function openAdd(){
+    document.getElementById("mask").style.display="flex";
+}
+function closeAdd(){
+    document.getElementById("mask").style.display="none";
+}
+function saveCourse(){
+    const name = document.getElementById("cName").value.trim();
+    const teacher = document.getElementById("cTea").value.trim();
+    const room = document.getElementById("cRoom").value.trim();
+    const wd = Number(document.getElementById("cWd").value);
+    const sec = Number(document.getElementById("cSec").value);
+    const s = Number(document.getElementById("cS").value);
+    const e = Number(document.getElementById("cE").value);
+
+    if(!name){
+        alert("课程名称不能为空");
+        return;
+    }
+    if(isNaN(s)||isNaN(e)||s<1||e<s||e>MAX_WEEK){
+        alert("周次填写错误！周次需在 1 - " + MAX_WEEK + " 之间，且起始周不能大于结束周");
+        return;
+    }
+    if(wd<0||wd>=DAY_COUNT){
+        alert("目前只支持周一至周五");
+        return;
+    }
+    const c = {
+        name,teacher,room,
+        week_day:wd,
+        section:sec,
+        start_week:s,
+        end_week:e,
+        color:getRandomColor()
+    }
+    courseList.push(c);
+    persist();
+    closeAdd();
+    // 清空表单
+    document.getElementById("cName").value = "";
+    document.getElementById("cTea").value = "";
+    document.getElementById("cRoom").value = "";
+    render();
+    alert("添加成功");
+}
+// 清空所有课程
+function clearAll(){
+    if(confirm("确定清空全部课程？不可恢复！")){
+        courseList = [];
+        try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+        render();
+    }
+}
+render();
+
+// 注册 Service Worker，装成 App 后断网也能打开
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+}
+</script>
+</body>
+</html>
